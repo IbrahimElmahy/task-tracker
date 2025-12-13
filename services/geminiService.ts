@@ -1,13 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Priority } from "../types";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+// Define model name constant
 const modelName = "gemini-2.5-flash";
 
 export const breakDownTask = async (goal: string): Promise<Array<{ title: string; description: string; priority: Priority; estimatedMinutes: number }>> => {
   try {
+    // Initialize Gemini Client inside the function to avoid top-level crashes
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const response = await ai.models.generateContent({
       model: modelName,
       contents: `Break down the following goal/task into smaller, actionable subtasks. Goal: "${goal}". 
@@ -42,6 +43,9 @@ export const breakDownTask = async (goal: string): Promise<Array<{ title: string
 
 export const suggestPrioritization = async (tasks: string[]): Promise<string> => {
     try {
+        // Initialize Gemini Client inside the function
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
         const response = await ai.models.generateContent({
             model: modelName,
             contents: `I have this list of tasks: ${JSON.stringify(tasks)}. 
@@ -50,6 +54,7 @@ export const suggestPrioritization = async (tasks: string[]): Promise<string> =>
         });
         return response.text || "Focus on your high priority tasks first!";
     } catch (e) {
+        console.error("Error getting suggestion:", e);
         return "Plan your day by tackling the hardest task first.";
     }
 }
