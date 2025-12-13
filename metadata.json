@@ -1,0 +1,5 @@
+{
+  "name": "TaskFlow AI",
+  "description": "A smart task tracking and scheduling application that uses Gemini to break down complex goals into manageable steps and visualize progress.",
+  "requestFramePermissions": []
+}
