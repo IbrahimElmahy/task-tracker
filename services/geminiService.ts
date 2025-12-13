@@ -1,16 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Priority } from "../types";
 
-// Safely retrieve API key to prevent crashes in environments where process is undefined
-const getApiKey = () => {
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env.API_KEY || '';
-  }
-  return '';
-};
-
 // Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const modelName = "gemini-2.5-flash";
 
