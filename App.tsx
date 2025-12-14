@@ -3,14 +3,19 @@ import { Task, Priority, TaskStatus } from './types';
 import { TaskCard } from './components/TaskCard';
 import { Stats } from './components/Stats';
 import { AISchedulerModal } from './components/AISchedulerModal';
+import { ManagerView } from './components/ManagerView';
 import { suggestPrioritization } from './services/geminiService';
-import { Plus, Layout, List, BrainCircuit, Sparkles, Search } from 'lucide-react';
+import { Plus, Layout, List, BrainCircuit, Sparkles, Users, X, Download } from 'lucide-react';
 
 const App = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filter, setFilter] = useState<'all' | 'todo' | 'done'>('all');
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<string>('');
+  
+  // New States for Manager Mode
+  const [isManagerMode, setIsManagerMode] = useState(false);
+  const [incomingTasks, setIncomingTasks] = useState<any[]>([]);
   
   // Local input state for simple add
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -31,12 +36,38 @@ const App = () => {
     localStorage.setItem('taskflow-tasks', JSON.stringify(tasks));
   }, [tasks]);
 
-  // AI Suggestion on mount or task change (debounced in reality, but simple effect here)
+  // Handle URL Params for Manager Mode or Importing
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    
+    // Check for Manager Mode
+    if (params.get('mode') === 'manager') {
+      setIsManagerMode(true);
+    }
+
+    // Check for Import Data
+    const importData = params.get('import');
+    if (importData) {
+      try {
+        // Decode logic: Base64 -> URI Component -> JSON
+        const jsonString = decodeURIComponent(escape(window.atob(importData)));
+        const data = JSON.parse(jsonString);
+        if (Array.isArray(data)) {
+          setIncomingTasks(data);
+          // Clean URL
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      } catch (e) {
+        console.error("Failed to parse import link", e);
+        alert("Invalid task link.");
+      }
+    }
+  }, []);
+
+  // AI Suggestion on mount or task change
   useEffect(() => {
     if (tasks.length > 0 && tasks.some(t => t.status !== TaskStatus.Done)) {
-      const todoTitles = tasks.filter(t => t.status === TaskStatus.Todo).map(t => t.title);
-      // We don't want to call API on every render, so let's just do it once when tasks length changes significantly or on user request.
-      // For this demo, we'll leave it manual or triggered by a button to save API calls.
+      // Logic for AI suggestion triggers
     }
   }, [tasks.length]);
 
@@ -72,6 +103,26 @@ const App = () => {
     setTasks(prev => [...newTasks, ...prev]);
   };
 
+  // Handler for importing tasks from Manager Link
+  const confirmImport = () => {
+    const newTasks = incomingTasks.map(t => ({
+      id: crypto.randomUUID(),
+      title: t.t, // Mapped from minified format
+      description: "Assigned by Manager",
+      priority: t.p as Priority,
+      status: TaskStatus.Todo,
+      estimatedMinutes: t.m,
+      tags: ['Manager-Assigned'],
+      createdAt: Date.now()
+    }));
+    
+    setTasks(prev => [...newTasks, ...prev]);
+    setIncomingTasks([]); // Close modal
+    
+    // Optional: Scroll to top or show success message
+    alert(`Successfully added ${newTasks.length} tasks from your manager.`);
+  };
+
   const handleStatusChange = (id: string, status: TaskStatus) => {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
   };
@@ -91,14 +142,68 @@ const App = () => {
      setAiSuggestion(advice);
   }
 
+  const copyManagerLink = () => {
+    const url = `${window.location.origin}${window.location.pathname}?mode=manager`;
+    navigator.clipboard.writeText(url);
+    alert("Manager Link Copied! Send this link to your manager so they can add tasks for you.");
+  }
+
   const filteredTasks = useMemo(() => {
     if (filter === 'all') return tasks;
     if (filter === 'done') return tasks.filter(t => t.status === TaskStatus.Done);
     return tasks.filter(t => t.status !== TaskStatus.Done);
   }, [tasks, filter]);
 
+  // RENDER MANAGER VIEW IF ACTIVE
+  if (isManagerMode) {
+    return <ManagerView onGoBack={() => {
+      setIsManagerMode(false);
+      window.history.replaceState({}, '', window.location.pathname);
+    }} />;
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 pb-20">
+    <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 relative">
+      
+      {/* Import Modal */}
+      {incomingTasks.length > 0 && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in-up">
+            <div className="flex items-center gap-3 text-indigo-600 mb-4">
+              <Download size={32} />
+              <h2 className="text-xl font-bold text-gray-900">Incoming Tasks</h2>
+            </div>
+            <p className="text-gray-600 mb-6">
+              You have received <strong>{incomingTasks.length}</strong> tasks from your manager link. Would you like to add them to your list?
+            </p>
+            <div className="bg-gray-50 rounded-lg p-3 mb-6 max-h-40 overflow-y-auto border border-gray-100">
+              <ul className="space-y-2">
+                {incomingTasks.map((t, i) => (
+                  <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                    <span className="text-indigo-500 font-bold">•</span>
+                    {t.t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setIncomingTasks([])}
+                className="flex-1 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-colors"
+              >
+                Discard
+              </button>
+              <button 
+                onClick={confirmImport}
+                className="flex-1 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-colors"
+              >
+                Accept Tasks
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -109,7 +214,15 @@ const App = () => {
               </div>
               <span className="font-bold text-xl tracking-tight text-gray-900">TaskFlow AI</span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
+              <button 
+                onClick={copyManagerLink}
+                className="flex items-center gap-2 text-xs md:text-sm font-medium text-gray-600 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 px-3 py-2 rounded-lg transition-colors border border-transparent hover:border-indigo-100"
+                title="Copy link for manager"
+              >
+                <Users size={16} />
+                <span className="hidden sm:inline">Invite Manager</span>
+              </button>
               <button 
                 onClick={() => setIsAIModalOpen(true)}
                 className="hidden sm:flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-full transition-colors"
